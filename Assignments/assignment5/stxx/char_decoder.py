@@ -45,12 +45,15 @@ class CharDecoder(nn.Module):
         dec_hidden = (last_dec_hidden, last_dec_cell)
         logits = self.char_output_projection(enc_hidden)
         return logits, dec_hidden
+        # logits size=(len, b, vocab)
         ### END YOUR CODE
 
     def train_forward(self, char_sequence, dec_hidden=None):
         """ Forward computation during training.
 
         @param char_sequence (Tensor): tensor of integers, shape (length, batch_size). Note that "length" here and in forward() need not be the same.
+        length=m_word, batch_size = src_len*batch
+
         @param dec_hidden (tuple(Tensor, Tensor)): initial internal state of the LSTM, obtained from the output of the word-level decoder. A tuple of two tensors of shape (1, batch_size, hidden_size)
 
         @returns The cross-entropy loss (Tensor), computed as the *sum* of cross-entropy losses of all the words in the batch.
@@ -103,14 +106,32 @@ class CharDecoder(nn.Module):
         ###      - We use curly brackets as start-of-word and end-of-word characters. That is, use the character '{' for <START> and '}' for <END>.
         ###        Their indices are self.target_vocab.start_of_word and self.target_vocab.end_of_word, respectively.
 
-        output_word = []
+        dec_hidden = initialStates  # 2* (1, b, h)
+        batch = dec_hidden[0].shape[1]
+        output_word = torch.tensor([]*batch, dtype=torch.long, device=device).contiguous()
 
-        dec_hidden = initialStates
+        # current_char size (1, b)
+        current_char = torch.tensor([self.target_vocab.start_of_word]*batch,
+                                    dtype=torch.long,device=device).reshape(1, -1).contiguous()
 
-        _, (h_t, c_t) = self.charDecoder(ch, dec_hidden)
+        for t in range(max_length):
+            logits, dec_hidden = self.forward(current_char, dec_hidden)
+            pt = F.softmax(logits, dim=2)
+            current_char = torch.argmax(pt, dim=2)
+            output_word = torch.cat((output_word, current_char), dim=0)# (len, b)
 
-        logits =
-
+        output_word = output_word.permute(1, 0).tolist() #List[List(int)], (b, len) #len指的是word len里面char总数
+        ## truncate???
+        # if current_char == torch.tensor([self.target_vocab.end_of_word]):
+        #     break
+        truncated_word = []
+        for w in output_word:
+            if self.target_vocab.end_of_word in w:
+                w = w[:w.index(self.target_vocab.end_of_word)]
+            truncated_word.append(w)
+        decode_words = [[self.target_vocab.id2char[ch] for ch in w] for w in truncated_word]
+        decode_words = ["".join(ch) for ch in decode_words]
+        return decode_words
 
 
 

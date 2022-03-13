@@ -138,14 +138,16 @@ class NMT(nn.Module):
         if self.charDecoder is not None:
             max_word_len = target_padded_chars.shape[-1]
 
-            target_words = target_padded[1:].contiguous().view(-1)
-            target_chars = target_padded_chars[1:].view(-1, max_word_len)
+            target_words = target_padded[1:].contiguous().view(-1) # all words (src_len*batch*mword, 1)
+            target_chars = target_padded_chars[1:].view(-1, max_word_len) # (src_len*batch, mword)
             target_outputs = combined_outputs.view(-1, 256)
 
             target_chars_oov = target_chars  # torch.index_select(target_chars, dim=0, index=oovIndices)
             rnn_states_oov = target_outputs  # torch.index_select(target_outputs, dim=0, index=oovIndices)
             oovs_losses = self.charDecoder.train_forward(target_chars_oov.t().contiguous(),
                                                          (rnn_states_oov.unsqueeze(0), rnn_states_oov.unsqueeze(0)))
+
+            # target_chars_oov.t().contiguous() -> shape (mword, src_len*batch)
             scores = scores - oovs_losses
 
         return scores
@@ -288,11 +290,7 @@ class NMT(nn.Module):
         O_t = self.dropout(torch.tanh(v_t))
 
         ### END YOUR CODE FROM ASSIGNMENT 4
-
         combined_output = O_t
-
-
-
 
         return dec_state, combined_output, e_t
 
